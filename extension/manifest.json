@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vidsnap: Video Downloader",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Download videos from any site in the resolution you want, as MP4 or MP3.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmmktAkrtPjqvbWN2C6s5zdLfd8iLsozwThPSzTeu0qOHRur6iXnOqnGNJ9gCky6coaYpQnMTFTZNfPDT8iptD+DUcVdnTxrjfCwMIBJoHiwyIkgSj8jcEdfKqlqh7DPLtoqJP8b3WaNFPp2PNsHK5oGx1cjD1LbecwDIeMF1tFqFepU2NphDmINhACtx0GvC6ueHCZ44Pnuo/yVGOzjArCSUSBVSlaLkDkxq0vA/5+2we7NFdM1GtIM6u2NHuqMgEFPgNPrx1DMYISjsh5zR7H2OEXEoIhK1WiaFrXKvXHNLa8gpSc6sd88d3rN6ZLBU7sKPSWLW5mQLg/3uCn37jwIDAQAB",
   "permissions": ["nativeMessaging", "cookies", "webRequest", "storage", "alarms"],
