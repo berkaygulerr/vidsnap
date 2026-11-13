@@ -239,7 +239,7 @@ async function refreshExtStatus() {
   try { st = await invoke("get_extension_status"); } catch (_) {}
   const el = $("st-ext");
   if (st && st.connectedAt) {
-    el.textContent = friendlyBrowser(st.browser) + " · " + rel(st.connectedAt) + " connected";
+    el.textContent = friendlyBrowser(st.browser) + " · connected " + rel(st.connectedAt);
     el.className = "ok";
   } else {
     el.textContent = "not connected yet"; el.className = "bad";
