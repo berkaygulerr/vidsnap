@@ -1,13 +1,5 @@
-# Derleme ciktilari
+# Build output
 target/
 node_modules/
 desktop/app/src-tauri/gen/
-
-# Eski Node yardimcisinin kisisel calisma verileri
-host/config.json
-host/history.json
-host/state.json
-host/host.log
-host/com.vidsnap.host.json
-
 *.log

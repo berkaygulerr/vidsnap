@@ -69,7 +69,7 @@ li.act .head { display: flex; align-items: center; gap: 8px; }
 li.act .head .title { flex: 1; min-width: 0; }
 li.act .ctl { display: flex; gap: 4px; flex: none; }
 button.icon { padding: 2px 8px; min-width: 28px; line-height: 1.4; }
-button.icon[aria-label="İptal"]:hover { border-color: var(--bad); color: var(--bad); }
+button.icon[aria-label="Cancel"]:hover { border-color: var(--bad); color: var(--bad); }
 li.act.paused .fill { background: var(--muted); transition: none; }
 li.act.paused .row2 span:first-child { font-weight: 600; }
 

@@ -37,11 +37,11 @@ function rel(v) {
   const t = typeof v === "number" ? (v < 1e12 ? v * 1000 : v) : Date.parse(v);
   if (isNaN(t)) return "";
   const s = Math.max(0, (Date.now() - t) / 1000);
-  if (s < 60) return "az önce";
-  if (s < 3600) return Math.floor(s / 60) + " dk önce";
-  if (s < 86400) return Math.floor(s / 3600) + " sa önce";
-  if (s < 86400 * 30) return Math.floor(s / 86400) + " gün önce";
-  return new Date(t).toLocaleDateString("tr-TR");
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago";
+  if (s < 86400 * 30) return Math.floor(s / 86400) + " d ago";
+  return new Date(t).toLocaleDateString("en-US");
 }
 
 async function loadHistory() {
@@ -49,12 +49,12 @@ async function loadHistory() {
   const ul = $("list");
   ul.textContent = "";
   $("empty").hidden = items.length > 0;
-  $("count").textContent = items.length ? items.length + " indirme" : "";
+  $("count").textContent = items.length ? items.length + (items.length === 1 ? " download" : " downloads") : "";
   $("clear").hidden = !items.length;
   for (const it of items) {
     const li = document.createElement("li");
     const title = document.createElement("div");
-    title.className = "title"; title.textContent = it.title || it.file || "(adsız)"; title.title = it.title || "";
+    title.className = "title"; title.textContent = it.title || it.file || "(untitled)"; title.title = it.title || "";
     const meta = document.createElement("div");
     meta.className = "meta";
     if (it.audio) { const b = document.createElement("span"); b.className = "badge"; b.textContent = "MP3"; meta.append(b); }
@@ -62,9 +62,9 @@ async function loadHistory() {
     meta.append(l);
     const acts = document.createElement("div");
     acts.className = "acts";
-    const open = document.createElement("button"); open.textContent = "Aç";
+    const open = document.createElement("button"); open.textContent = "Open";
     open.onclick = () => invoke("open_path", { path: it.file }).catch((e) => toast(e));
-    const rev = document.createElement("button"); rev.textContent = "Klasörde göster";
+    const rev = document.createElement("button"); rev.textContent = "Show in folder";
     rev.onclick = () => invoke("reveal_path", { path: it.file }).catch((e) => toast(e));
     acts.append(open, rev);
     li.append(title, meta, acts);
@@ -109,19 +109,19 @@ async function loadActive() {
     if (pend && !pendingActive) pending.delete(it.id);
     const li = mk("li", "act" + (paused ? " paused" : ""));
     const head = mk("div", "head");
-    head.append(mk("div", "title", it.title || it.url || "(adsız)"));
+    head.append(mk("div", "title", it.title || it.url || "(untitled)"));
     const btns = mk("div", "ctl");
     btns.append(
       paused
-        ? iconBtn("▶", "Devam et", () => ctl(it, "resume"), pendingActive)
-        : iconBtn("⏸", "Duraklat", () => ctl(it, "pause"), pendingActive),
-      iconBtn("✕", "İptal", () => ctl(it, "cancel"), pendingActive && pend.action === "cancel")
+        ? iconBtn("▶", "Resume", () => ctl(it, "resume"), pendingActive)
+        : iconBtn("⏸", "Pause", () => ctl(it, "pause"), pendingActive),
+      iconBtn("✕", "Cancel", () => ctl(it, "cancel"), pendingActive && pend.action === "cancel")
     );
     head.append(btns);
     li.append(head);
     const meta = mk("div", "meta");
     if (it.audio) meta.append(mk("span", "badge", "MP3"));
-    if (it.stage > 0) meta.append(mk("span", "stage", "Ses"));
+    if (it.stage > 0) meta.append(mk("span", "stage", "Audio"));
     if (it.label) meta.append(mk("span", null, it.label));
     li.append(meta);
     const pct = Math.max(0, Math.min(100, Number(it.percent) || 0));
@@ -132,13 +132,13 @@ async function loadActive() {
     li.append(bar);
     const row = mk("div", "row2");
     if (paused) {
-      row.append(mk("span", null, "Duraklatıldı"));
-      row.append(mk("span", null, "%" + (Math.round(pct * 10) / 10)));
+      row.append(mk("span", null, "Paused"));
+      row.append(mk("span", null, (Math.round(pct * 10) / 10) + "%"));
     } else if (pct >= 100) {
-      row.append(mk("span", null, "İşleniyor…"));
+      row.append(mk("span", null, "Processing…"));
     } else {
-      row.append(mk("span", null, "%" + (Math.round(pct * 10) / 10)));
-      row.append(mk("span", null, [it.speed, it.eta ? "kalan " + it.eta : ""].filter(Boolean).join(" · ")));
+      row.append(mk("span", null, (Math.round(pct * 10) / 10) + "%"));
+      row.append(mk("span", null, [it.speed, it.eta ? it.eta + " left" : ""].filter(Boolean).join(" · ")));
     }
     li.append(row);
     ul.append(li);
@@ -148,7 +148,7 @@ async function loadActive() {
 }
 
 $("clear").onclick = async () => {
-  if (!confirm("Geçmiş temizlensin mi? (Dosyalar silinmez)")) return;
+  if (!confirm("Clear history? (Files are not deleted)")) return;
   await invoke("clear_history"); loadHistory();
 };
 
@@ -160,10 +160,10 @@ async function refreshState() {
   state = await invoke("get_state");
   $("dldir").textContent = state.downloadDir || "-"; $("dldir").title = state.downloadDir || "";
   $("extpath").textContent = state.extensionPath; $("extpath").title = state.extensionPath;
-  setStatus("st-ytdlp", !!state.ytdlpVersion, state.ytdlpVersion || (state.ytdlpPresent ? "çalışmıyor" : "yok"));
-  setStatus("st-ffmpeg", state.ffmpegPresent, state.ffmpegPresent ? "var" : "yok");
-  setStatus("st-reg", state.registered, state.registered ? "tamam" : "kayıtlı değil");
-  setStatus("st-host", state.hostExists, state.hostExists ? "var" : "bulunamadı");
+  setStatus("st-ytdlp", !!state.ytdlpVersion, state.ytdlpVersion || (state.ytdlpPresent ? "not working" : "missing"));
+  setStatus("st-ffmpeg", state.ffmpegPresent, state.ffmpegPresent ? "present" : "missing");
+  setStatus("st-reg", state.registered, state.registered ? "OK" : "not registered");
+  setStatus("st-host", state.hostExists, state.hostExists ? "present" : "not found");
   refreshExtStatus();
   try { $("autostart").checked = await T.autostart.isEnabled(); } catch (_) {}
   try { $("notify").checked = await invoke("get_notify"); } catch (_) {}
@@ -173,20 +173,20 @@ async function refreshState() {
 }
 
 $("pick").onclick = async () => {
-  const dir = await T.dialog.open({ directory: true, defaultPath: state.downloadDir || undefined, title: "İndirme klasörü" });
-  if (dir) { await invoke("set_download_dir", { dir }); refreshState(); toast("Kaydedildi"); }
+  const dir = await T.dialog.open({ directory: true, defaultPath: state.downloadDir || undefined, title: "Download folder" });
+  if (dir) { await invoke("set_download_dir", { dir }); refreshState(); toast("Saved"); }
 };
 $("autostart").onchange = async (e) => {
   try { e.target.checked ? await T.autostart.enable() : await T.autostart.disable(); }
-  catch (err) { toast("Hata: " + err); }
+  catch (err) { toast("Error: " + err); }
 };
 $("notify").onchange = async (e) => {
   try { await invoke("set_notify", { enabled: e.target.checked }); }
-  catch (err) { toast("Hata: " + err); }
+  catch (err) { toast("Error: " + err); }
 };
 on("autoupd", "change", async (e) => {
   try { await invoke("set_auto_update", { enabled: e.target.checked }); }
-  catch (err) { toast("Hata: " + err); }
+  catch (err) { toast("Error: " + err); }
 });
 listen("update-status", (ev) => {
   const p = ev.payload || {};
@@ -195,21 +195,21 @@ listen("update-status", (ev) => {
   if (p.state === "installing") toast(p.text);
 });
 on("chkupd", "click", async () => {
-  const b = $("chkupd"); b.disabled = true; $("upd-status").textContent = "Denetleniyor…";
+  const b = $("chkupd"); b.disabled = true; $("upd-status").textContent = "Checking…";
   try { $("upd-status").textContent = await invoke("check_update"); }
-  catch (e) { $("upd-status").textContent = "Hata: " + e; }
+  catch (e) { $("upd-status").textContent = "Error: " + e; }
   b.disabled = false;
 });
 async function doUpdate() {
   const out = $("upd-out"), b = $("upd");
-  b.disabled = true; out.hidden = false; out.textContent = "Güncelleniyor…";
+  b.disabled = true; out.hidden = false; out.textContent = "Updating…";
   try { out.textContent = await invoke("update_ytdlp"); } catch (e) { out.textContent = String(e); }
   b.disabled = false; refreshState();
 }
 $("upd").onclick = doUpdate;
 $("log").onclick = () => invoke("open_log").catch((e) => toast(e));
 $("openext").onclick = () => invoke("open_extension_dir");
-$("repair").onclick = () => { if (confirm("Araçlar yeniden indirilip kayıtlar onarılsın mı?")) runSetup(true); };
+$("repair").onclick = () => { if (confirm("Re-download the tools and repair registrations?")) runSetup(true); };
 
 // ---------- setup ----------
 let setupWasFirstRun = false;
@@ -219,11 +219,11 @@ function setupView(v) {
 }
 async function runSetup(force) {
   setupView("run");
-  $("bar").style.width = "0"; $("bar").classList.add("indet"); $("setup-text").textContent = "Hazırlanıyor…";
+  $("bar").style.width = "0"; $("bar").classList.add("indet"); $("setup-text").textContent = "Preparing…";
   try {
     await invoke("run_setup", { force });
     await refreshState();
-    if (setupWasFirstRun) { setupWasFirstRun = false; $("setup").hidden = true; openWizard(); } else { $("setup").hidden = true; toast("Onarım tamamlandı"); }
+    if (setupWasFirstRun) { setupWasFirstRun = false; $("setup").hidden = true; openWizard(); } else { $("setup").hidden = true; toast("Repair complete"); }
   } catch (e) {
     $("err-text").textContent = String(e); setupView("err");
   }
@@ -233,25 +233,25 @@ $("finish").onclick = () => { $("setup").hidden = true; setupWasFirstRun = false
 
 // ---------- extension setup wizard ----------
 const BROWSER_NAMES = { "brave.exe": "Brave", "chrome.exe": "Chrome", "msedge.exe": "Edge" };
-const friendlyBrowser = (b) => BROWSER_NAMES[String(b || "").toLowerCase()] || (b && b !== "bilinmiyor" ? b : "bilinmiyor");
+const friendlyBrowser = (b) => BROWSER_NAMES[String(b || "").toLowerCase()] || (b && b !== "unknown" && b !== "bilinmiyor" ? b : "unknown");
 async function refreshExtStatus() {
   let st = null;
   try { st = await invoke("get_extension_status"); } catch (_) {}
   const el = $("st-ext");
   if (st && st.connectedAt) {
-    el.textContent = friendlyBrowser(st.browser) + " · " + rel(st.connectedAt) + " bağlandı";
+    el.textContent = friendlyBrowser(st.browser) + " · " + rel(st.connectedAt) + " connected";
     el.className = "ok";
   } else {
-    el.textContent = "henüz bağlanmadı"; el.className = "bad";
+    el.textContent = "not connected yet"; el.className = "bad";
   }
   return st;
 }
 const wz = { timer: null, openedAt: 0, hadBefore: false, running: false, startedAt: 0 };
 async function copyText(t, msg) {
-  try { await navigator.clipboard.writeText(t); toast(msg || "Kopyalandı"); }
-  catch (_) { toast("Kopyalanamadı"); }
+  try { await navigator.clipboard.writeText(t); toast(msg || "Copied"); }
+  catch (_) { toast("Could not copy"); }
 }
-const STEP_LABEL = { open: "Tarayıcı açılıyor", navigate: "Tarayıcı açılıyor", devmode: "Geliştirici modu açılıyor", load: "Eklenti yükleniyor", dialog: "Eklenti yükleniyor", select: "Eklenti yükleniyor", verify: "Doğrulanıyor" };
+const STEP_LABEL = { open: "Opening browser", navigate: "Opening browser", devmode: "Enabling developer mode", load: "Loading extension", dialog: "Loading extension", select: "Loading extension", verify: "Verifying" };
 // a checklist row is complete when its last sub-step reports ok
 const ROW_LAST = { navigate: "open", devmode: "devmode", select: "load", verify: "verify" };
 const ROW_ORDER = ["open", "devmode", "load", "verify"];
@@ -273,7 +273,7 @@ listen("ext-step", (ev) => {
 });
 function wzSuccess(name) {
   clearInterval(wz.timer);
-  $("wz-ok-text").textContent = "✓ Eklenti kuruldu" + (name ? " (" + name + ")" : "");
+  $("wz-ok-text").textContent = "✓ Extension installed" + (name ? " (" + name + ")" : "");
   wzView("ok"); refreshExtStatus();
 }
 async function extConnectedSince(t) {
@@ -303,8 +303,8 @@ async function autoInstall(b) {
   wzView("main");
   $("wz-fail").hidden = false;
   $("wz-fail").textContent = err
-    ? "Otomatik kurulum başlatılamadı: " + err
-    : "Otomatik kurulum başarısız" + (label ? " (adım: " + label + ")" : "") + ". Elle kurulumu deneyin.";
+    ? "Could not start automatic setup: " + err
+    : "Automatic setup failed" + (label ? " (step: " + label + ")" : "") + ". Try manual setup.";
   showManual(true);
 }
 function showManual(on) { $("wz-manual").hidden = !on; }
@@ -327,16 +327,16 @@ async function openWizard() {
   }
   const main = list.find((b) => b.isDefault) || list[0];
   if (main) {
-    $("wz-auto").textContent = "Eklentiyi kur (" + main.name + ")";
+    $("wz-auto").textContent = "Install extension (" + main.name + ")";
     $("wz-auto").onclick = () => autoInstall(main);
     for (const b of list.filter((x) => x !== main)) {
-      const btn = mk("button", "ghost", b.name + " için kur");
+      const btn = mk("button", "ghost", "Install for " + b.name);
       btn.onclick = () => autoInstall(b);
       $("wz-others").append(btn);
     }
   }
   for (const b of list) {
-    const btn = mk("button", "browser", b.name + " için elle kur");
+    const btn = mk("button", "browser", "Install manually for " + b.name);
     btn.onclick = async () => {
       document.querySelectorAll("button.browser").forEach((x) => x.classList.toggle("sel", x === btn));
       $("wz-url").textContent = b.url;
@@ -344,7 +344,7 @@ async function openWizard() {
       try {
         const p = await invoke("setup_browser", { id: b.id });
         $("wz-path").textContent = p;
-        await copyText(p, "Klasör yolu kopyalandı");
+        await copyText(p, "Folder path copied");
       } catch (e) { toast(String(e)); }
       $("wz-steps").hidden = false;
       clearInterval(wz.timer);
@@ -352,7 +352,7 @@ async function openWizard() {
     };
     $("wz-browsers").append(btn);
   }
-  $("wz-copypath").onclick = () => copyText($("wz-path").textContent, "Klasör yolu kopyalandı");
+  $("wz-copypath").onclick = () => copyText($("wz-path").textContent, "Folder path copied");
 }
 $("wz-manual-btn").onclick = () => showManual($("wz-manual").hidden);
 async function pollWizard() {
@@ -377,7 +377,7 @@ listen("navigate", (ev) => showTab(ev.payload));
 listen("tray-update", (ev) => {
   const out = $("upd-out");
   out.hidden = false;
-  out.textContent = ev.payload === "start" ? "Güncelleniyor…" : ev.payload;
+  out.textContent = ev.payload === "start" ? "Updating…" : ev.payload;
   if (ev.payload !== "start") refreshState();
 });
 

@@ -1,4 +1,4 @@
-// Vidsnap içerik betiği: video üzerine gelince sağ üst köşede indirme butonu gösterir.
+// Vidsnap content script: shows a download button at the top right when hovering a video.
 (() => {
   if (window.__vidsnapLoaded) return;
   window.__vidsnapLoaded = true;
@@ -7,7 +7,7 @@
   const MIN_H = 90;
 
   // ------------------------------------------------------------------
-  // DOM yardımcıları (Shadow DOM'u da delerek)
+  // DOM helpers (piercing Shadow DOM too)
   // ------------------------------------------------------------------
   const parentDeep = (el) => el.parentElement || (el.parentNode && el.parentNode.host) || null;
 
@@ -16,7 +16,7 @@
     return null;
   }
 
-  // Videodan yukarı doğru çıkarak en yakın eşleşen bağlantıyı bul
+  // Walk up from the video to find the nearest matching link
   function findLinkUp(el, re, maxDepth = 15) {
     let n = el;
     for (let d = 0; n && d < maxDepth; d++, n = parentDeep(n)) {
@@ -31,8 +31,8 @@
     return r.width >= MIN_W && r.height >= MIN_H;
   }
 
-  // İçinde tek video olan ve boyutu ona uyan oynatıcı kapsayıcısı mı?
-  // (YouTube gibi oynatıcılarda <video> öğesi oynatmadan önce görünür alanın dışında durabiliyor)
+  // Is this a player container with a single video of matching size?
+  // (in players like YouTube, the <video> element can sit outside the visible area before playback)
   function playerContainerVideo(el) {
     if (!el.querySelectorAll || el === document.body || el === document.documentElement) return null;
     const vids = el.querySelectorAll('video');
@@ -45,8 +45,8 @@
     return rw > 0.6 && rw < 1.5 && rh > 0.5 && rh < 2 ? vids[0] : null;
   }
 
-  // İmlecin altındaki video ve butonun yerleşeceği alan.
-  // Üst katmanların ve shadow root'ların altını da görür.
+  // The video under the cursor and the area the button anchors to.
+  // Sees beneath overlays and shadow roots too.
   function hitAt(x, y) {
     const stack = [];
     const seen = new Set();
@@ -77,11 +77,11 @@
   }
 
   // ------------------------------------------------------------------
-  // Site adaptörleri: akıştaki videonun kendi gönderi adresini bulur
+  // Site adapters: find the post URL of the video in the feed
   // ------------------------------------------------------------------
   const HOST = location.hostname.replace(/^(www|m|mobile)\./, '');
   const is = (...ds) => ds.some((d) => HOST === d || HOST.endsWith('.' + d));
-  // Videonun üstünde sabit başlık çubuğu olan siteler: buton alta gelsin
+  // Sites with a fixed header bar above the video: place the button below
   const PREFER_BELOW = is('youtube.com');
   const KNOWN = [
     'vimeo.com', 'twitch.tv', 'dailymotion.com', 'bilibili.com', 'kick.com', 'streamable.com',
@@ -122,11 +122,11 @@
     if (is('threads.net', 'threads.com')) return findLinkUp(video, /\/post\/[\w-]+/, 12) || here;
     if (is('linkedin.com')) return findLinkUp(video, /\/(posts|feed\/update)\//, 12) || here;
     if (KNOWN.some((d) => is(d))) return here;
-    return null; // bilinmeyen site: doğrudan kaynak ve ağdan yakalanan akışlar kullanılır
+    return null; // unknown site: use the direct source and streams captured from the network
   }
 
   // ------------------------------------------------------------------
-  // Arayüz
+  // UI
   // ------------------------------------------------------------------
   const root = document.createElement('vidsnap-root');
   root.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;';
@@ -205,7 +205,7 @@
 </style>
 <div class="wrap" hidden>
   <div class="inner">
-    <button class="btn" title="Videoyu indir (Vidsnap)">
+    <button class="btn" title="Download video (Vidsnap)">
       <svg data-vs-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
       <span class="pct"></span>
     </button>
@@ -221,7 +221,7 @@
   const toast = shadow.querySelector('.toast');
   const panel = shadow.querySelector('.panel');
 
-  // Sitenin kendi tıklama işleyicileri butonumuzu görmesin
+  // Keep the site's own click handlers from seeing our button
   for (const t of ['click', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'dblclick', 'wheel', 'touchstart']) {
     wrap.addEventListener(t, (e) => e.stopPropagation(), { passive: t === 'wheel' || t === 'touchstart' });
   }
@@ -234,21 +234,21 @@
   document.addEventListener('fullscreenchange', () => { if (current) mount(); });
 
   // ------------------------------------------------------------------
-  // Durum
+  // State
   // ------------------------------------------------------------------
-  let current = null;     // butonun gösterildiği video
-  let anchor = null;      // butonun konumlandığı alan (video ya da oynatıcı kapsayıcısı)
+  let current = null;     // video the button is shown for
+  let anchor = null;      // area the button is positioned on (video or player container)
   let panelOpen = false;
   let hideTimer = null;
   let loopOn = false;
   const state = new WeakMap();  // video -> {key, status, options, candidate, title, error}
   const downloads = new Map();  // id -> {video, label, title, percent, stage, status, ...}
 
-  let nativeMode = false;  // panel sitenin içine eklenen butondan mı açıldı
+  let nativeMode = false;  // whether the panel was opened from a button injected into the site
   let lastPoint = [0, 0];
 
   // ------------------------------------------------------------------
-  // Otomatik tema: butonun duracağı yerin arka planı, sitenin yazı tipi ve vurgu rengi
+  // Auto theme: background where the button sits, the site's font and accent color
   // ------------------------------------------------------------------
   const parseRgb = (s) => {
     const m = String(s || '').match(/[\d.]+/g);
@@ -304,10 +304,10 @@
   }
 
   // ------------------------------------------------------------------
-  // Yerli butonlar: büyük sitelerde sitenin kendi buton çubuğuna eklenir
+  // Native buttons: on big sites, added to the site's own button bar
   // ------------------------------------------------------------------
   const ICON = '<svg data-vs-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:100%;height:100%;display:block"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>';
-  const ownerBtn = new WeakMap(); // gönderi/oynatıcı -> eklenen buton
+  const ownerBtn = new WeakMap(); // post/player -> injected button
   const nativeButtons = new Set();
 
   function makeNative(ref, owner, keyFn, label) {
@@ -317,8 +317,8 @@
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'vidsnap-native';
-    b.title = 'Videoyu indir';
-    b.setAttribute('aria-label', 'Videoyu indir');
+    b.title = 'Download video';
+    b.setAttribute('aria-label', 'Download video');
     const radius = /^\d+px 0px 0px \d+px$/.test(s.borderRadius) ? s.borderRadius.split(' ')[0] : s.borderRadius;
     Object.assign(b.style, {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flex: 'none',
@@ -340,11 +340,11 @@
     return b;
   }
 
-  // Tıklama, ilerleme ve kayıt bağlantıları (hazır bir öğeyi yerli butona çevirir)
+  // Click, progress and registration wiring (turns an existing element into a native button)
   function wireNative(el, owner, keyFn) {
     el.classList.add('vidsnap-native');
-    el.title = 'Videoyu indir';
-    el.setAttribute('aria-label', 'Videoyu indir');
+    el.title = 'Download video';
+    el.setAttribute('aria-label', 'Download video');
     for (const t of ['pointerdown', 'mousedown', 'mouseup', 'pointerup']) el.addEventListener(t, (e) => e.stopPropagation());
     el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); toggleNative(el._key(), el); }, true);
     el._key = keyFn;
@@ -353,12 +353,12 @@
     return el;
   }
 
-  // Instagram: videonun altındaki (akış) ya da sağındaki (Reels) 24px ikonları konuma göre bulur,
-  // Paylaş öğesini kopyalayıp ikonunu değiştirir. Sınıf adlarına bağlı değildir.
+  // Instagram: finds the 24px icons below the video (feed) or to its right (Reels) by position,
+  // copies the Share item and swaps its icon. Does not depend on class names.
   function instagramNative(video) {
     const vr = video.getBoundingClientRect();
     const art = closestDeep(video, 'article');
-    // Reels akıştan açılınca bir pencerede (dialog) açılır: ikonları orada ara
+    // Reels opened from the feed show up in a dialog: look for the icons there
     const scope = art || closestDeep(video, '[role="dialog"]') || document.querySelector('main') || document.body;
     const row = [], col = [];
     for (const svg of scope.querySelectorAll('svg')) {
@@ -370,13 +370,13 @@
     const vertical = col.length > row.length;
     const icons = (vertical ? col : row).sort((a, b) => (vertical ? a.r.top - b.r.top : a.r.left - b.r.left));
     if (icons.length < 3) return;
-    // Kaydet ikonunu bul: önce etiketten, olmazsa konumdan (akışta en sağdaki, Reels'te sondan ikinci)
+    // Find the Save icon: by label first, otherwise by position (rightmost in the feed, second to last in Reels)
     const SAVE_RE = /^(save|kaydet|speichern|enregistrer|guardar|salva|salvar|opslaan|сохранить|zapisz)$/i;
     let si = icons.findIndex((ic) => SAVE_RE.test((ic.svg.getAttribute('aria-label') || '').trim()));
     if (si < 0) si = vertical ? icons.length - 2 : icons.length - 1;
     if (si < 2) return;
     const save = icons[si];
-    // Kaydet öğesi: kaydet ikonunu içeren, başka ikon içermeyen en üst öğe
+    // Save item: the topmost element that contains the Save icon and no other icon
     let item = save.svg;
     while (item.parentElement && item.parentElement !== scope && item.parentElement.querySelectorAll('svg').length === 1) item = item.parentElement;
     const box = item.parentElement;
@@ -386,10 +386,10 @@
     if (existing) { existing._key = () => owner; ownerBtn.set(owner, existing); return; }
     let ref;
     if (vertical) {
-      // Reels: dikey sütun. Kaydet öğesinin bir kopyasını sütuna, kaydet'in hemen üstüne ekle (hizayı bozmadan)
+      // Reels: vertical column. Insert a copy of the Save item into the column, right above Save (without breaking alignment)
       ref = item;
     } else {
-      // Akış: kaydet kapsayıcısı sağa yaslı (margin-left:auto) olabilir: butonu onun İÇİNE, kaydet butonunun önüne koy
+      // Feed: the Save container may be right-aligned (margin-left:auto): put the button INSIDE it, before the Save button
       const innerChild = [...item.children].find((c) => c.tagName.toLowerCase() !== 'svg' && c.querySelector('svg'));
       const host = innerChild ? item : box;
       ref = innerChild || item;
@@ -460,10 +460,10 @@
           const share = q('shreddit-post-share-button');
           if (!share) continue;
           const ref = (share.shadowRoot && share.shadowRoot.querySelector('button')) || share;
-          share.after(makeNative(ref, post, () => post, 'İndir'));
+          share.after(makeNative(ref, post, () => post, 'Download'));
         }
       }
-    } catch (e) { /* site yapısı değiştiyse yüzen buton kullanılır */ }
+    } catch (e) { /* if the site structure changed, the floating button is used */ }
   }
   if (is('youtube.com', 'x.com', 'twitter.com', 'instagram.com', 'reddit.com')) setInterval(scanNative, 1500);
 
@@ -503,14 +503,14 @@
     const right = Math.min(r.right, W - 4);
     let x, y;
     const fitsAbove = r.top - B - G >= (PREFER_BELOW ? H : 0);
-    if (fitsAbove) { x = right; y = r.top - B - G; }                          // videonun üstü
-    else if (r.bottom + B + G <= H) { x = right; y = r.bottom + G; }          // videonun altı
+    if (fitsAbove) { x = right; y = r.top - B - G; }                          // above the video
+    else if (r.bottom + B + G <= H) { x = right; y = r.bottom + G; }          // below the video
     else if (r.top - B - G >= 0) { x = right; y = r.top - B - G; }
-    else if (r.right + B + G <= W) { x = r.right + G + B; y = Math.max(r.top, 0) + G; } // sağ kenar dışı
-    else { x = right - 10; y = Math.max(r.top, 0) + 10; }                     // son çare: içeride
+    else if (r.right + B + G <= W) { x = r.right + G + B; y = Math.max(r.top, 0) + G; } // outside the right edge
+    else { x = right - 10; y = Math.max(r.top, 0) + 10; }                     // last resort: inside
     wrap.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     lastPoint = [x - B / 2, y + B / 2];
-    // Menü: altta yer yoksa yukarı açılsın
+    // Menu: open upward if there is no room below
     const below = H - y - B - G, above = y - G;
     const up = below < 220 && above > below;
     inner.style.flexDirection = up ? 'column-reverse' : 'column';
@@ -546,7 +546,7 @@
 
   function hide(force) {
     if ((panelOpen || toastOpen) && !force) return;
-    // İndirme sürerken yüzen buton videonun üstünde kalsın (ilerleme halkası görünsün)
+    // While a download runs, keep the floating button on the video (so the progress ring stays visible)
     if (!force && current && isRunning(current)) return;
     closePanel();
     closeToast(true);
@@ -557,7 +557,7 @@
   }
 
   // ------------------------------------------------------------------
-  // Fare takibi
+  // Mouse tracking
   // ------------------------------------------------------------------
   let lastMove = 0;
   document.addEventListener('mousemove', (e) => {
@@ -620,9 +620,9 @@
     const st = state.get(current) || { status: 'probing' };
     let html = `<div class="head"><span class="logo">Vidsnap</span>${st.title ? `<span class="title">${esc(st.title)}</span>` : ''}</div>`;
     if (st.status === 'probing') {
-      html += `<div class="msg"><span class="spin"></span>Kaliteler alınıyor…</div>`;
+      html += `<div class="msg"><span class="spin"></span>Fetching qualities…</div>`;
     } else if (st.status === 'error') {
-      html += `<div class="msg err">${esc(st.error)}</div><button class="small retry">Tekrar dene</button>`;
+      html += `<div class="msg err">${esc(st.error)}</div><button class="small retry">Try again</button>`;
     } else {
       html += '<div class="list">' + st.options.map((o, i) =>
         `<button class="opt" data-i="${i}"><b>${esc(o.label)}</b><span>${o.size ? '~' + fmtSize(o.size) : ''}</span><span class="tag">${o.ext || 'MP4'}</span></button>`
@@ -643,42 +643,42 @@
     if (isActive(d)) {
       const pct = Math.round(d.percent || 0);
       const paused = d.status === 'paused';
-      const status = paused ? `Duraklatıldı · %${pct}`
-        : pct >= 100 ? 'İşleniyor…' : `${d.stage > 0 ? 'Ses ' : ''}%${pct}${d.speed && !/unknown/i.test(d.speed) ? ' · ' + esc(d.speed) : ''}`;
+      const status = paused ? `Paused · ${pct}%`
+        : pct >= 100 ? 'Processing…' : `${d.stage > 0 ? 'Audio ' : ''}${pct}%${d.speed && !/unknown/i.test(d.speed) ? ' · ' + esc(d.speed) : ''}`;
       const dis = d.pending ? ' disabled style="opacity:.5;pointer-events:none"' : '';
       const toggle = paused
-        ? `<button class="icon resume" data-id="${id}" title="Devam et"${dis}>${PLAY_ICON}</button>`
-        : `<button class="icon pause" data-id="${id}" title="Duraklat"${dis}>${PAUSE_ICON}</button>`;
+        ? `<button class="icon resume" data-id="${id}" title="Resume"${dis}>${PLAY_ICON}</button>`
+        : `<button class="icon pause" data-id="${id}" title="Pause"${dis}>${PAUSE_ICON}</button>`;
       return `<div class="dl">
-        <div class="dl-line">${head}<span class="st">${status}</span>${toggle}<button class="icon cancel" data-id="${id}" title="İptal"${dis}>${X_ICON}</button></div>
+        <div class="dl-line">${head}<span class="st">${status}</span>${toggle}<button class="icon cancel" data-id="${id}" title="Cancel"${dis}>${X_ICON}</button></div>
         <div class="bar"${paused ? ' style="opacity:.5"' : ''}><i style="width:${Math.min(100, d.percent || 0)}%"></i></div>
       </div>`;
     }
     if (d.status === 'done') {
-      return `<div class="dl"><div class="dl-line"><span class="ok">✓</span>${head}<span class="st">İndirildi</span><button class="icon reveal" data-id="${id}" title="Klasörde göster">${FOLDER_ICON}</button></div></div>`;
+      return `<div class="dl"><div class="dl-line"><span class="ok">✓</span>${head}<span class="st">Downloaded</span><button class="icon reveal" data-id="${id}" title="Show in folder">${FOLDER_ICON}</button></div></div>`;
     }
     if (d.status === 'cancelled') {
-      return `<div class="dl"><div class="dl-line">${head}<span class="st">İptal edildi</span></div></div>`;
+      return `<div class="dl"><div class="dl-line">${head}<span class="st">Cancelled</span></div></div>`;
     }
-    return `<div class="dl"><div class="dl-line">${head}<span class="st err">Hata</span><button class="icon dismiss" data-id="${id}" title="Kapat">${X_ICON}</button></div>
+    return `<div class="dl"><div class="dl-line">${head}<span class="st err">Error</span><button class="icon dismiss" data-id="${id}" title="Close">${X_ICON}</button></div>
       <div class="err" style="font-size:12px;margin-top:4px">${esc(d.message)}</div></div>`;
   }
 
   // ------------------------------------------------------------------
-  // Buton durumu: ilerleme halkası, ✓ ya da ! (kısa süre)
+  // Button state: progress ring, ✓ or ! (briefly)
   // ------------------------------------------------------------------
   const RING = 2 * Math.PI * 9;
   const IDLE_ICON = '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>';
 
   const isActive = (d) => d.status === 'running' || d.status === 'paused';
 
-  // Süren ya da duraklatılmış indirme var mı (yüzen buton görünür kalsın)
+  // Is a download running or paused (so the floating button stays visible)
   function isRunning(key) {
     for (const d of downloads.values()) if (d.video === key && isActive(d)) return true;
     return false;
   }
 
-  // Bu video için gösterilecek durum: süren indirme, yoksa az önce biten/hata veren
+  // State to show for this video: the running download, otherwise one that just finished/failed
   function latestFor(key) {
     let pick = null;
     for (const d of downloads.values()) {
@@ -707,14 +707,14 @@
     svg.style.color = color;
   }
 
-  // Panelde yalnızca süren indirme (iptal için) gösterilir; biten/hata baloncukta
+  // The panel shows only running downloads (for cancel); finished/failed ones go in the toast
   function renderDownloads() {
     if (!panelOpen || !current) return;
     const box = panel.querySelector('.dls');
     if (!box) return;
     const rows = [...downloads.entries()].filter(([, d]) => d.video === current && isActive(d));
     box.style.display = rows.length ? '' : 'none';
-    // Butonlar değişmediyse sadece yazı ve çubuğu güncelle (tıklama sırasında DOM yenilenmesin)
+    // If the buttons did not change, only update text and bar (so the DOM is not rebuilt during a click)
     const sig = rows.map(([id, d]) => `${id}:${d.status}:${d.pending ? 1 : 0}`).join('|');
     if (box.dataset.sig === sig && box.children.length === rows.length) {
       rows.forEach(([id, d], i) => {
@@ -733,7 +733,7 @@
   function renderButton() {
     const cur = current ? latestFor(current) : null;
     paintIcon(btn.querySelector('svg[data-vs-icon]'), cur);
-    pctEl.textContent = cur && isActive(cur) ? `%${Math.round(cur.percent || 0)}` : '';
+    pctEl.textContent = cur && isActive(cur) ? `${Math.round(cur.percent || 0)}%` : '';
     for (const b of nativeButtons) {
       if (!b.isConnected) { nativeButtons.delete(b); continue; }
       const k = b._key();
@@ -741,12 +741,12 @@
       const d = [...downloads.values()].find((x) => x.video === k && isActive(x));
       const pct = b.querySelector('.vidsnap-pct');
       if (pct) {
-        pct.textContent = d ? `%${Math.round(d.percent || 0)}` : '';
+        pct.textContent = d ? `${Math.round(d.percent || 0)}%` : '';
         pct.style.display = d ? '' : 'none';
         if (!b.dataset.ytdPad) b.dataset.ytdPad = b.style.padding || '0';
-        b.style.padding = d ? '0 12px' : b.dataset.ytdPad; // yüzde görünürken hap şekline geç
+        b.style.padding = d ? '0 12px' : b.dataset.ytdPad; // switch to pill shape while the percentage is shown
       }
-      else b.title = d ? `İndiriliyor %${Math.round(d.percent || 0)}` : 'Videoyu indir';
+      else b.title = d ? `Downloading ${Math.round(d.percent || 0)}%` : 'Download video';
     }
   }
 
@@ -764,7 +764,7 @@
       const cmd = el.classList.contains('cancel') ? 'cancel' : el.classList.contains('pause') ? 'pause' : 'resume';
       const d = downloads.get(id);
       if (d) {
-        d.pending = true; // yanıt gelene kadar butonları kilitle
+        d.pending = true; // lock the buttons until a response arrives
         setTimeout(() => { if (d.pending) { d.pending = false; renderDownloads(); } }, 4000);
       }
       renderDownloads();
@@ -773,7 +773,7 @@
   });
 
   // ------------------------------------------------------------------
-  // Baloncuk: indirme bitince/hata olunca butonun yanında kısa süre
+  // Toast: briefly next to the button when a download finishes/fails
   // ------------------------------------------------------------------
   let toastOpen = false;
   let toastTimer = null;
@@ -787,7 +787,7 @@
   }
 
   function showToast(d) {
-    if (panelOpen && current !== d.video) return;           // başka bir panel açıksa araya girme
+    if (panelOpen && current !== d.video) return;           // do not interrupt if another panel is open
     const a = d.anchor;
     if (!a || !a.isConnected) return;
     clearTimeout(hideTimer);
@@ -803,13 +803,13 @@
     if (!loopOn) { loopOn = true; requestAnimationFrame(loop); }
     const what = `${esc(d.label)} · ${esc(d.ext || 'MP4')}`;
     if (d.status === 'done') {
-      toast.innerHTML = `<span class="t-ic ok">✓</span><div class="t-txt"><b>İndirildi</b><span>${what}</span></div>` +
-        `<button class="small reveal">Klasörde göster</button>`;
+      toast.innerHTML = `<span class="t-ic ok">✓</span><div class="t-txt"><b>Downloaded</b><span>${what}</span></div>` +
+        `<button class="small reveal">Show in folder</button>`;
     } else if (d.status === 'error') {
-      toast.innerHTML = `<span class="t-ic bad">!</span><div class="t-txt"><b>İndirilemedi</b><span>${esc(d.message)}</span></div>` +
-        `<button class="icon dismiss" title="Kapat">${X_ICON}</button>`;
+      toast.innerHTML = `<span class="t-ic bad">!</span><div class="t-txt"><b>Download failed</b><span>${esc(d.message)}</span></div>` +
+        `<button class="icon dismiss" title="Close">${X_ICON}</button>`;
     } else {
-      toast.innerHTML = `<span class="t-ic">✕</span><div class="t-txt"><b>İptal edildi</b><span>${what}</span></div>`;
+      toast.innerHTML = `<span class="t-ic">✕</span><div class="t-txt"><b>Cancelled</b><span>${what}</span></div>`;
     }
     toast.dataset.file = d.file || '';
     toast.hidden = false;
@@ -827,7 +827,7 @@
     closeToast();
   });
 
-  // Bitiş: ✓/! birkaç saniye butonda kalır, sonra kayıt silinir (tam geçmiş masaüstü uygulamasında)
+  // Finish: ✓/! stays on the button for a few seconds, then the record is removed (full history is in the desktop app)
   function finish(id, d) {
     d.flashUntil = Date.now() + 6000;
     showToast(d);
@@ -835,13 +835,13 @@
   }
 
   // ------------------------------------------------------------------
-  // Service worker iletişimi
+  // Service worker communication
   // ------------------------------------------------------------------
   async function send(msg) {
     try {
       return await chrome.runtime.sendMessage(msg);
     } catch (e) {
-      return { type: 'error', message: 'Eklenti güncellendi. Sayfayı yenileyin (F5).' };
+      return { type: 'error', message: 'Extension updated. Reload the page (F5).' };
     }
   }
 
@@ -865,7 +865,7 @@
     if (res && res.type === 'formats') {
       Object.assign(st, { status: 'ready', options: res.options, candidate: res.candidate, title: res.title });
     } else {
-      Object.assign(st, { status: 'error', error: (res && res.message) || 'Bilinmeyen hata' });
+      Object.assign(st, { status: 'error', error: (res && res.message) || 'Unknown error' });
     }
     if (current === v) render();
   }
@@ -878,7 +878,7 @@
       video: v, label: opt.label, ext: opt.ext || 'MP4', title: st.title, percent: 0, stage: 0, status: 'running',
       anchor, native: nativeMode,
     });
-    // Seçim yapıldı: panel kapansın, ilerleme butonda görünsün
+    // Selection made: close the panel, show progress on the button
     if (nativeMode) hide(true); else closePanel();
     renderButton();
     const res = await send({ cmd: 'download', id, candidate: st.candidate, format: opt.format, audio: !!opt.audio, frameUrl: location.href, title: st.title, label: opt.label });

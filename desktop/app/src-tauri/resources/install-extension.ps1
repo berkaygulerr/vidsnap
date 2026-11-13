@@ -1,11 +1,11 @@
-﻿# Vidsnap - tarayici eklentisini Windows UI Automation ile otomatik yukler.
-# Cikti: satir basina bir JSON nesnesi (stdout). Cikis kodu 0 = basarili.
-# Dosya UTF-8 BOM ile kaydedilmistir; regex'ler yine de ASCII'dir (. joker).
+﻿# Vidsnap - installs the browser extension automatically via Windows UI Automation.
+# Output: one JSON object per line (stdout). Exit code 0 = success.
+# The file is saved as UTF-8 with BOM; the regexes are still ASCII-only (. wildcard) so they match Turkish and English UI labels.
 param(
   [Parameter(Mandatory = $true)][string]$Browser,
   [Parameter(Mandatory = $true)][string]$Page,
   [Parameter(Mandatory = $true)][string]$ExtDir,
-  [string]$UserDataDir = ''   # yalnizca test: gecici profil ile baslatir
+  [string]$UserDataDir = ''   # test only: launch with a temporary profile
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -44,7 +44,7 @@ public static class VsWin {
   [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, int m, IntPtr w, IntPtr l);
   public static uint PidOf(IntPtr h) { uint p; GetWindowThreadProcessId(h, out p); return p; }
-  // Gorunur, basligi olan ust duzey Chromium pencereleri (verilen PID kumesine ait)
+  // Visible, titled top-level Chromium windows belonging to the given PIDs
   public static long[] TopWindows(uint[] pids) {
     var set = new HashSet<uint>(pids); var res = new List<long>();
     EnumWindows((h, l) => {
@@ -60,7 +60,7 @@ public static class VsWin {
   }
   public static void Focus(IntPtr h) {
     if (IsIconic(h)) ShowWindow(h, 9);
-    keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero); // ALT: on plan kilidini asar
+    keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero); // ALT: bypasses the foreground lock
     SetForegroundWindow(h);
   }
 }
@@ -71,7 +71,7 @@ $TS = [System.Windows.Automation.TreeScope]
 $TrueC = [System.Windows.Automation.Condition]::TrueCondition
 $exeName = [IO.Path]::GetFileNameWithoutExtension($Browser)
 
-# ---- pano (STA runspace: powershell.exe -File varsayilan olarak MTA) ----
+# ---- clipboard (STA runspace: powershell.exe -File defaults to MTA) ----
 $script:staRs = [runspacefactory]::CreateRunspace()
 $script:staRs.ApartmentState = 'STA'; $script:staRs.ThreadOptions = 'ReuseThread'; $script:staRs.Open()
 function InSta([scriptblock]$sb, $arg) {
@@ -125,9 +125,9 @@ $savedClip = $null; $clipSaved = $false
 $loadAsync = $null; $loadPs = $null; $loadRs = $null
 $ok = $false; $failedStep = ''; $failMsg = ''
 try {
-  if (-not (Test-Path -LiteralPath $Browser -PathType Leaf)) { StepFail 'open' 'Tarayici bulunamadi' }
-  if (-not (Test-Path -LiteralPath (Join-Path $ExtDir 'manifest.json'))) { StepFail 'open' 'Eklenti klasoru bulunamadi' }
-  if ($Page -notmatch '^(chrome|brave|edge)://extensions/?$') { StepFail 'open' 'Gecersiz sayfa' }
+  if (-not (Test-Path -LiteralPath $Browser -PathType Leaf)) { StepFail 'open' 'Browser not found' }
+  if (-not (Test-Path -LiteralPath (Join-Path $ExtDir 'manifest.json'))) { StepFail 'open' 'Extension folder not found' }
+  if ($Page -notmatch '^(chrome|brave|edge)://extensions/?$') { StepFail 'open' 'Invalid page' }
 
   # ---------- 1) open ----------
   $before = Browser-Windows
@@ -145,11 +145,11 @@ try {
     Start-Sleep -Milliseconds 300
   }
   if ($hwnd -eq [IntPtr]::Zero) {
-    # yedek: bu tarayicinin on plandaki penceresi
+    # fallback: this browser's foreground window
     $fg = [VsWin]::GetForegroundWindow()
     if ($fg -ne [IntPtr]::Zero -and (Browser-Pids) -contains [VsWin]::PidOf($fg)) { $hwnd = $fg }
   }
-  if ($hwnd -eq [IntPtr]::Zero) { StepFail 'open' 'Tarayici penceresi bulunamadi' }
+  if ($hwnd -eq [IntPtr]::Zero) { StepFail 'open' 'Browser window not found' }
   $win = $A::FromHandle($hwnd)
   [VsWin]::Focus($hwnd)
   $wp = $null
@@ -168,7 +168,7 @@ try {
     try { $omni = $win.FindFirst($TS::Descendants, $editCond) } catch {}
     if (-not $omni) { Start-Sleep -Milliseconds 300 }
   }
-  if (-not $omni) { StepFail 'navigate' 'Adres cubugu bulunamadi' }
+  if (-not $omni) { StepFail 'navigate' 'Address bar not found' }
   [VsWin]::Focus($hwnd)
   try { $omni.SetFocus() } catch {}
   $omni.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($Page)
@@ -196,7 +196,7 @@ try {
     } catch { $dev = $null }
     if (-not $dev) { Start-Sleep -Milliseconds 400 }
   }
-  if (-not $dev) { StepFail 'devmode' 'Gelistirici modu anahtari bulunamadi' }
+  if (-not $dev) { StepFail 'devmode' 'Developer mode toggle not found' }
   $tp = $null
   if ($dev.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$tp)) {
     if ($tp.Current.ToggleState -ne 'On') { $tp.Toggle(); Start-Sleep -Milliseconds 600 }
@@ -207,9 +207,9 @@ try {
 
   # ---------- 4) load ----------
   $load = Find-ByName $win '^(Load unpacked|Paketlenmemi. ..e y.kle|Paketlenmemi. uzant.y. y.kle)$' 15 -Actionable
-  if (-not $load) { StepFail 'load' 'Paketlenmemis yukle dugmesi bulunamadi' }
+  if (-not $load) { StepFail 'load' 'Load unpacked button not found' }
   [VsWin]::Focus($hwnd)
-  # Invoke() modal pencere kapanana kadar bloklar: ayri runspace
+  # Invoke() blocks until the modal window closes: use a separate runspace
   $loadRs = [runspacefactory]::CreateRunspace(); $loadRs.Open()
   $loadPs = [powershell]::Create(); $loadPs.Runspace = $loadRs
   [void]$loadPs.AddScript({ param($e) $e.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }).AddArgument($load)
@@ -227,7 +227,7 @@ try {
     } catch {}
     if (-not $dlg) { Start-Sleep -Milliseconds 300 }
   }
-  if (-not $dlg) { StepFail 'dialog' 'Klasor secme penceresi acilmadi' }
+  if (-not $dlg) { StepFail 'dialog' 'Folder picker did not open' }
   $dh = [IntPtr]$dlg.Current.NativeWindowHandle
   [VsWin]::Focus($dh)
   Start-Sleep -Milliseconds 500
@@ -235,7 +235,7 @@ try {
 
   # ---------- 6) select ----------
   $savedClip = Clip-GetText; $clipSaved = $true
-  if (-not (Clip-SetText $ExtDir)) { StepFail 'select' 'Pano kullanilamadi' }
+  if (-not (Clip-SetText $ExtDir)) { StepFail 'select' 'Clipboard unavailable' }
   [VsWin]::Focus($dh)
   [System.Windows.Forms.SendKeys]::SendWait('%d')
   Start-Sleep -Milliseconds 400
@@ -254,20 +254,20 @@ try {
     } catch {}
     if (-not $okBtn) { Start-Sleep -Milliseconds 300 }
   }
-  if (-not $okBtn) { StepFail 'select' 'Klasor sec dugmesi bulunamadi' }
+  if (-not $okBtn) { StepFail 'select' 'Select Folder button not found' }
   [void][VsWin]::SendMessage([IntPtr]$okBtn.Current.NativeWindowHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)  # BM_CLICK
   $end = (Get-Date).AddSeconds(10); $gone = $false
   while ((Get-Date) -lt $end) {
     if (-not [VsWin]::IsWindow($dh)) { $gone = $true; break }
     Start-Sleep -Milliseconds 300
   }
-  if (-not $gone) { StepFail 'select' 'Klasor penceresi kapanmadi' }
+  if (-not $gone) { StepFail 'select' 'Folder picker did not close' }
   Emit 'select' $true
 
   # ---------- 7) verify ----------
   [VsWin]::Focus($hwnd)
   $card = Find-ByName $win 'Vidsnap' 15
-  if (-not $card) { StepFail 'verify' 'Eklenti karti gorunmedi' }
+  if (-not $card) { StepFail 'verify' 'Extension card did not appear' }
   Emit 'verify' $true
   $ok = $true
 } catch {

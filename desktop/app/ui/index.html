@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,77 +10,77 @@
 <header>
   <div class="brand"><span class="logo">&#8595;</span> Vidsnap</div>
   <nav>
-    <button class="tab active" data-tab="downloads">İndirmeler</button>
-    <button class="tab" data-tab="settings">Ayarlar</button>
+    <button class="tab active" data-tab="downloads">Downloads</button>
+    <button class="tab" data-tab="settings">Settings</button>
   </nav>
 </header>
 
 <main>
   <section id="downloads" class="panel active">
     <div id="active-wrap" hidden>
-      <div class="bar"><span class="muted">İndiriliyor</span></div>
+      <div class="bar"><span class="muted">Downloading</span></div>
       <ul id="active-list"></ul>
-      <div class="bar sep"><span class="muted">Geçmiş</span></div>
+      <div class="bar sep"><span class="muted">History</span></div>
     </div>
     <div class="bar">
       <span id="count" class="muted"></span>
-      <button id="clear" class="ghost">Geçmişi temizle</button>
+      <button id="clear" class="ghost"Clear history</button>
     </div>
     <ul id="list"></ul>
-    <p id="empty" class="muted center" hidden>Henüz indirme yok. Tarayıcı eklentisinden bir video indirin.</p>
+    <p id="empty" class="muted center" hidden>No downloads yet. Download a video from the browser extension.</p>
   </section>
 
   <section id="settings" class="panel">
     <div class="card">
-      <h3>İndirme klasörü</h3>
+      <h3>Download folder</h3>
       <div class="row">
         <code id="dldir" class="grow">-</code>
-        <button id="pick">Değiştir…</button>
+        <button id="pick"Change…</button>
       </div>
     </div>
     <div class="card">
       <label class="row switch">
-        <span class="grow">Windows ile başlat</span>
+        <span class="grow"Start with Windows</span>
         <input type="checkbox" id="autostart">
       </label>
     </div>
     <div class="card">
       <label class="row switch">
-        <span class="grow">İndirme bitince bildirim göster</span>
+        <span class="grow">Show a notification when a download finishes</span>
         <input type="checkbox" id="notify">
       </label>
     </div>
     <div class="card">
-      <h3>Durum</h3>
+      <h3>Status</h3>
       <div class="status"><span>yt-dlp</span><b id="st-ytdlp">…</b></div>
       <div class="status"><span>ffmpeg</span><b id="st-ffmpeg">…</b></div>
-      <div class="status"><span>Tarayıcı kaydı</span><b id="st-reg">…</b></div>
-      <div class="status"><span>Yardımcı (host)</span><b id="st-host">…</b></div>
+      <div class="status"><spanBrowser registration</span><b id="st-reg">…</b></div>
+      <div class="status"><spanHelper (host)</span><b id="st-host">…</b></div>
       <div class="row gap">
-        <button id="upd">yt-dlp'yi güncelle</button>
-        <button id="repair">Onar</button>
-        <button id="log" class="ghost">Günlüğü aç</button>
+        <button id="upd"Update yt-dlp</button>
+        <button id="repair"Repair</button>
+        <button id="log" class="ghost"Open log</button>
       </div>
       <pre id="upd-out" hidden></pre>
     </div>
     <div class="card">
-      <h3>Güncellemeler</h3>
-      <div class="status"><span>Sürüm</span><b id="app-version">…</b></div>
+      <h3>Updates</h3>
+      <div class="status"><spanVersion</span><b id="app-version">…</b></div>
       <label class="row switch">
-        <span class="grow">Otomatik güncelle</span>
+        <span class="grow"Auto-update</span>
         <input type="checkbox" id="autoupd">
       </label>
       <div class="row gap">
-        <button id="chkupd">Güncellemeleri denetle</button>
+        <button id="chkupd"Check for updates</button>
       </div>
       <p id="upd-status" class="small muted"></p>
     </div>
     <div class="card">
-      <h3>Tarayıcı eklentisi</h3>
-      <div class="status"><span>Eklenti</span><b id="st-ext">…</b></div>
+      <h3>Browser extension</h3>
+      <div class="status"><span>Extension</span><b id="st-ext">…</b></div>
       <div class="row gap">
-        <button id="setupext" class="primary">Eklentiyi kur</button>
-        <button id="openext" class="ghost">Klasörü aç</button>
+        <button id="setupext" class="primary">Install extension</button>
+        <button id="openext" class="ghost"Open folder</button>
       </div>
       <code id="extpath" class="block">-</code>
     </div>
@@ -90,20 +90,20 @@
 <div id="setup" class="overlay" hidden>
   <div class="box">
     <div id="setup-run">
-      <h2>Kurulum</h2>
-      <p class="muted">Gerekli araçlar indiriliyor, lütfen bekleyin…</p>
+      <h2>Setup</h2>
+      <p class="muted">Downloading required tools, please wait…</p>
       <div class="progress"><div id="bar"></div></div>
-      <p id="setup-text" class="small">Hazırlanıyor…</p>
+      <p id="setup-text" class="small"Preparing…</p>
     </div>
     <div id="setup-err" hidden>
-      <h2>Kurulum başarısız</h2>
+      <h2>Setup failed</h2>
       <p id="err-text" class="small"></p>
-      <button id="retry">Tekrar dene</button>
+      <button id="retry"Try again</button>
     </div>
     <div id="setup-done" hidden>
-      <h2>Hazır</h2>
-      <p>Şimdi tarayıcı eklentisini kuralım.</p>
-      <button id="finish" class="primary">Devam</button>
+      <h2>Ready</h2>
+      <p>Now let's install the browser extension.</p>
+      <button id="finish" class="primary"Continue</button>
     </div>
   </div>
 </div>
@@ -111,55 +111,55 @@
 <div id="wizard" class="overlay" hidden>
   <div class="box wide">
     <div id="wz-main">
-      <h2>Eklentiyi kur</h2>
-      <p class="muted small">Vidsnap tarayıcınızı açıp eklentiyi sizin yerinize yükler.</p>
+      <h2>Install extension</h2>
+      <p class="muted small">Vidsnap opens your browser and installs the extension for you.</p>
       <button id="wz-auto" class="primary big" hidden></button>
       <div id="wz-others" class="row gap others" hidden></div>
-      <p id="wz-nobrowser" class="small muted" hidden>Chrome, Edge veya Brave bulunamadı. Klasörü açıp elle yükleyebilirsiniz.</p>
+      <p id="wz-nobrowser" class="small muted" hidden>Chrome, Edge or Brave not found. You can open the folder and install manually.</p>
       <p id="wz-fail" class="small bad" hidden></p>
-      <div class="row gap"><button id="wz-manual-btn" class="ghost">Elle kur</button><button id="wz-close" class="ghost">Kapat</button></div>
+      <div class="row gap"><button id="wz-manual-btn" class="ghost"Install manually</button><button id="wz-close" class="ghost"Close</button></div>
       <div id="wz-manual" hidden>
-        <p class="muted small">Elle kurulum için tarayıcınızı seçin:</p>
+        <p class="muted small">Choose your browser for manual setup:</p>
         <div id="wz-browsers"></div>
         <div id="wz-steps" hidden>
           <div class="step">
             <span class="num">1</span>
             <div class="grow">
-              <div>Sağ üstteki <b>Geliştirici modu</b> anahtarını açın</div>
-              <div class="mock"><span class="mock-title">Eklentiler</span><span class="muted">Geliştirici modu</span><span class="tg"><i></i></span></div>
+              <div>Turn on the <b>Developer mode</b> switch at the top right</div>
+              <div class="mock"><span class="mock-title">Extensions</span><span class="muted">Developer mode</span><span class="tg"><i></i></span></div>
             </div>
           </div>
           <div class="step">
             <span class="num">2</span>
             <div class="grow">
-              <div>Açılan klasörü sayfaya <b>sürükle bırak</b></div>
-              <div class="mock mock-drag"><span class="folder">&#128193; extension</span><span class="arrow">&#10140;</span><span class="drop">Eklentiler sayfası</span></div>
-              <div class="muted small">Ya da "Paketlenmemiş öğe yükle" düğmesine tıklayıp kopyalanan yolu yapıştırın.</div>
+              <div><b>Drag and drop</b> the opened folder onto the page</div>
+              <div class="mock mock-drag"><span class="folder">&#128193; extension</span><span class="arrow">&#10140;</span><span class="drop"Extensions page</span></div>
+              <div class="muted small">Or click "Load unpacked" and paste the copied path.</div>
             </div>
           </div>
-          <div class="fallback small muted">Sayfa açılmadıysa adres çubuğuna yazın:
-            <div class="row"><code id="wz-url" class="grow">-</code><button id="wz-copyurl" class="ghost">Kopyala</button></div>
-            <div class="row" style="margin-top:6px"><code id="wz-path" class="grow">-</code><button id="wz-copypath" class="ghost">Kopyala</button></div>
+          <div class="fallback small muted">If the page did not open, type this in the address bar:
+            <div class="row"><code id="wz-url" class="grow">-</code><button id="wz-copyurl" class="ghost"Copy</button></div>
+            <div class="row" style="margin-top:6px"><code id="wz-path" class="grow">-</code><button id="wz-copypath" class="ghost"Copy</button></div>
           </div>
-          <p class="wait small"><span class="dot"></span> Eklentinin bağlanması bekleniyor…</p>
+          <p class="wait small"><span class="dot"></span> Waiting for the extension to connect…</p>
         </div>
       </div>
     </div>
     <div id="wz-run" hidden>
-      <h2>Kuruluyor…</h2>
-      <p class="muted">Lütfen birkaç saniye fare ve klavyeye dokunmayın.</p>
+      <h2>Installing…</h2>
+      <p class="muted">Please don't touch the mouse or keyboard for a few seconds.</p>
       <ul id="wz-checklist" class="checklist">
-        <li data-k="open"><span class="ck"></span>Tarayıcı açılıyor</li>
-        <li data-k="devmode"><span class="ck"></span>Geliştirici modu açılıyor</li>
-        <li data-k="load"><span class="ck"></span>Eklenti yükleniyor</li>
-        <li data-k="verify"><span class="ck"></span>Doğrulanıyor</li>
+        <li data-k="open"><span class="ck"></span>Opening browser</li>
+        <li data-k="devmode"><span class="ck"></span>Enabling developer mode</li>
+        <li data-k="load"><span class="ck"></span>Loading extension</li>
+        <li data-k="verify"><span class="ck"></span>Verifying</li>
       </ul>
     </div>
     <div id="wz-ok" class="center-box" hidden>
       <div class="big-check">&#10003;</div>
-      <h2 id="wz-ok-text">Eklenti kuruldu</h2>
-      <p class="muted small">Tarayıcı geliştirici modu uyarısı gösterebilir, bu normaldir.</p>
-      <button id="wz-done" class="primary">Tamam</button>
+      <h2 id="wz-ok-text"Extension installed</h2>
+      <p class="muted small">The browser may show a developer mode warning; this is normal.</p>
+      <button id="wz-done" class="primary"OK</button>
     </div>
   </div>
 </div>

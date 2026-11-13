@@ -3,7 +3,7 @@
 ; Kill Vidsnap processes of the current user: app, native-messaging host,
 ; and yt-dlp/ffmpeg/ffprobe whose image path is inside $INSTDIR\bin.
 !macro VidsnapKillAll
-  DetailPrint "Çalışan Vidsnap kapatılıyor…"
+  DetailPrint "Closing running Vidsnap..."
   nsExec::Exec 'taskkill /F /T /IM vidsnap-app.exe'
   Pop $0
   nsExec::Exec 'taskkill /F /T /IM vidsnap-host.exe'
@@ -23,7 +23,7 @@
   ${If} $1 == '"'
     IfSilent vs_pre_kill
     ${If} $PassiveMode <> 1
-      MessageBox MB_OKCANCEL|MB_ICONINFORMATION "Vidsnap şu an çalışıyor (tarayıcıda indirme olabilir). Devam edilirse kapatılacak." IDOK vs_pre_kill
+      MessageBox MB_OKCANCEL|MB_ICONINFORMATION "Vidsnap is currently running (a download may be in progress in the browser). It will be closed if you continue." IDOK vs_pre_kill
       Abort
     ${EndIf}
   ${EndIf}

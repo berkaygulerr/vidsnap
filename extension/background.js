@@ -1,12 +1,12 @@
 // Vidsnap service worker
-// 1) Ağ trafiğinden video akışlarını (m3u8 / mpd / mp4) sekme+frame bazında yakalar
-// 2) İçerik betiği ile yerel yardımcı program (yt-dlp) arasında köprü kurar
+// 1) Captures video streams (m3u8 / mpd / mp4) from network traffic, per tab and frame
+// 2) Bridges the content script and the native helper (yt-dlp)
 
 const HOST = 'com.vidsnap.host';
 const MAX_STREAMS_PER_TAB = 40;
 
 // ------------------------------------------------------------------
-// Ağ yakalama
+// Network capture
 // ------------------------------------------------------------------
 const streamsMem = new Map(); // tabId -> [{url, kind, frameId, t}]
 
@@ -32,7 +32,7 @@ function classify(url, contentType) {
   const ct = (contentType || '').toLowerCase();
   let path;
   try { path = new URL(url).pathname.toLowerCase(); } catch { return null; }
-  if (/\.(m4s|ts|aac|m4a|vtt|webvtt|key)$/.test(path)) return null; // parça / yan dosya
+  if (/\.(m4s|ts|aac|m4a|vtt|webvtt|key)$/.test(path)) return null; // segment / sidecar file
   if (ct.includes('mpegurl') || path.endsWith('.m3u8')) return 'hls';
   if (ct.includes('dash+xml') || path.endsWith('.mpd')) return 'dash';
   if (/\.(mp4|webm|mov|m4v)$/.test(path) || ct.startsWith('video/')) {
@@ -42,7 +42,7 @@ function classify(url, contentType) {
   return null;
 }
 
-// Aynı dosyanın byte-range isteklerini tek kayıtta topla
+// Merge byte-range requests for the same file into one entry
 function normalize(url) {
   try {
     const u = new URL(url);
@@ -78,7 +78,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 chrome.tabs.onRemoved.addListener((tabId) => clearStreams(tabId));
 
-// Eklenti yüklenince/tarayıcı açılınca masaüstü uygulamasına "bağlandım" sinyali (tek seferlik)
+// On extension install / browser startup, signal the desktop app that we are connected (one-time)
 function announce() {
   try {
     chrome.runtime.sendNativeMessage(HOST, { type: 'ping', id: 'hello' }, () => void chrome.runtime.lastError);
@@ -88,9 +88,9 @@ chrome.runtime.onInstalled.addListener(announce);
 chrome.runtime.onStartup.addListener(announce);
 
 // ------------------------------------------------------------------
-// Kendini güncelleme: masaüstü uygulaması güncellenince eklenti dosyaları
-// diskte değişir. Diskteki sürüm çalışan sürümden farklıysa yeniden yükle.
-// Süren/duraklatılmış indirme varken bekle (yeniden yükleme bağlantıyı koparır).
+// Self-update: when the desktop app updates, the extension files change
+// on disk. If the on-disk version differs from the running one, reload.
+// Wait while a download is running/paused (reloading drops the connection).
 // ------------------------------------------------------------------
 async function checkSelfUpdate() {
   try {
@@ -105,7 +105,7 @@ chrome.alarms.onAlarm.addListener((a) => { if (a.name === 'vidsnap-self-update')
 chrome.runtime.onStartup.addListener(checkSelfUpdate);
 
 // ------------------------------------------------------------------
-// Yerel yardımcı program bağlantısı
+// Native helper connection
 // ------------------------------------------------------------------
 let port = null;
 let seq = 0;
@@ -114,9 +114,9 @@ const downloads = new Map(); // downloadId -> {tabId, frameId}
 
 function hostMissingMessage(raw) {
   if (/not found|bulunamad/i.test(raw || '')) {
-    return 'Vidsnap uygulaması kurulu değil ya da kaydı eksik. Vidsnap uygulamasını açın (Ayarlar → Onar).';
+    return 'Vidsnap app is not installed or not registered. Open the Vidsnap app (Settings → Repair).';
   }
-  return 'Yardımcı programla bağlantı koptu: ' + (raw || 'bilinmeyen hata');
+  return 'Lost connection to the helper: ' + (raw || 'unknown error');
 }
 
 function getPort() {
@@ -157,10 +157,10 @@ function sendToFrame(target, msg) {
 function onHostMessage(msg) {
   if (downloads.has(msg.id)) {
     const target = downloads.get(msg.id);
-    // Sadece kesin bitişte eşlemeyi sil (paused/resumed/progress sürerken lazım)
+    // Only drop the mapping on a final state (needed during paused/resumed/progress)
     if (msg.type === 'done' || msg.type === 'error' || msg.type === 'cancelled') {
       downloads.delete(msg.id);
-      if (downloads.size === 0) setTimeout(checkSelfUpdate, 5000); // bekleyen güncelleme varsa şimdi uygula
+      if (downloads.size === 0) setTimeout(checkSelfUpdate, 5000); // apply any pending update now
     }
     sendToFrame(target, { evt: 'download', ...msg });
     updateBadge();
@@ -179,7 +179,7 @@ function updateBadge() {
 }
 
 // ------------------------------------------------------------------
-// Aday URL'ler + çerezler
+// Candidate URLs + cookies
 // ------------------------------------------------------------------
 async function cookiesFor(urls) {
   const seen = new Map();
@@ -213,7 +213,7 @@ async function buildCandidates(req, sender) {
   const all = await getStreams(tabId);
   let streams = all.filter((s) => s.frameId === frameId);
   if (streams.length === 0) streams = all;
-  // Önce manifest'ler (HLS/DASH), içinde "master" geçenler önde; sonra dosyalar
+  // Manifests first (HLS/DASH), those containing "master" up front; then files
   const rank = (s) => (s.kind === 'file' ? 2 : 0) + (/master|playlist|manifest/i.test(s.url) ? 0 : 1) * 0.5;
   streams.slice().sort((a, b) => rank(a) - rank(b) || b.t - a.t).slice(0, 4).forEach((s) => add(s.url, s.kind));
 
@@ -230,7 +230,7 @@ async function buildCandidates(req, sender) {
 }
 
 // ------------------------------------------------------------------
-// İçerik betiğinden gelen istekler
+// Requests from the content script
 // ------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
   if (!sender.tab) return;
@@ -238,9 +238,9 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     switch (req.cmd) {
       case 'probe': {
         const candidates = await buildCandidates(req, sender);
-        if (candidates.length === 0) return { type: 'error', message: 'Bu video için adres bulunamadı.' };
+        if (candidates.length === 0) return { type: 'error', message: 'No URL found for this video.' };
         const res = await request({ type: 'probe', candidates, pageTitle: req.pageTitle });
-        // Çerezler sayfa tarafına asla dönmesin
+        // Never send cookies back to the page side
         if (res.candidate) { const { cookies, ...rest } = res.candidate; res.candidate = rest; }
         return res;
       }
@@ -270,7 +270,7 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
       case 'reveal':
         return request({ type: 'reveal', file: req.file });
       default:
-        return { type: 'error', message: 'Bilinmeyen komut' };
+        return { type: 'error', message: 'Unknown command' };
     }
   })().then(sendResponse);
   return true;

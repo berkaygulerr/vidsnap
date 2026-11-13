@@ -217,9 +217,9 @@ async fn download_file(app: &AppHandle, url: &str, dest: &Path, stage: &str, lab
             let (pct, text) = match total {
                 Some(t) if t > 0 => (
                     Some(got as f64 * 100.0 / t as f64),
-                    format!("{label} indiriliyor… {:.1} / {:.1} MB", mb, t as f64 / 1_048_576.0),
+                    format!("Downloading {label}… {:.1} / {:.1} MB", mb, t as f64 / 1_048_576.0),
                 ),
-                _ => (None, format!("{label} indiriliyor… {:.1} MB", mb)),
+                _ => (None, format!("Downloading {label}… {:.1} MB", mb)),
             };
             emit_progress(app, stage, pct, &text);
         }
@@ -257,7 +257,7 @@ fn extract_ffmpeg(zip_path: &Path, out: &Path) -> Result<(), String> {
         found += 1;
     }
     if found < 2 {
-        return Err("ffmpeg arşivinde ffmpeg.exe / ffprobe.exe bulunamadı".into());
+        return Err("ffmpeg.exe / ffprobe.exe not found in the ffmpeg archive".into());
     }
     Ok(())
 }
@@ -275,7 +275,7 @@ async fn do_setup(app: &AppHandle, force: bool) -> Result<(), String> {
     if force || !ffmpeg_ok() || !bin_dir().join("ffprobe.exe").exists() {
         let zip = bin_dir().join("ffmpeg.zip");
         download_file(app, FFMPEG_URL, &zip, "ffmpeg", "ffmpeg").await?;
-        emit_progress(app, "ffmpeg", None, "ffmpeg ayıklanıyor…");
+        emit_progress(app, "ffmpeg", None, "Extracting ffmpeg…");
         let (z2, b2) = (zip.clone(), bin_dir());
         let r = tauri::async_runtime::spawn_blocking(move || extract_ffmpeg(&z2, &b2))
             .await
@@ -283,12 +283,12 @@ async fn do_setup(app: &AppHandle, force: bool) -> Result<(), String> {
         let _ = std::fs::remove_file(&zip);
         r?;
     }
-    emit_progress(app, "register", None, "Yapılandırma yazılıyor…");
+    emit_progress(app, "register", None, "Writing configuration…");
     write_config(app, None)?;
     if std::env::var("VIDSNAP_NO_REGISTER").ok().as_deref() != Some("1") {
         register(app)?;
     }
-    emit_progress(app, "done", Some(100.0), "Hazır");
+    emit_progress(app, "done", Some(100.0), "Ready");
     Ok(())
 }
 
@@ -366,10 +366,10 @@ fn control_dir() -> PathBuf {
 #[tauri::command]
 fn control_download(id: String, action: String) -> Result<(), String> {
     if !matches!(action.as_str(), "pause" | "resume" | "cancel") {
-        return Err("Geçersiz komut".into());
+        return Err("Invalid command".into());
     }
     if id.is_empty() || id.contains(['\\', '/', ':']) || id.contains("..") {
-        return Err("Geçersiz indirme kimliği".into());
+        return Err("Invalid download ID".into());
     }
     let dir = control_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -408,7 +408,7 @@ fn explorer_open(path: &str) {
 fn open_path(path: String) -> Result<(), String> {
     let path = win_path(&path);
     if !Path::new(&path).exists() {
-        return Err("Dosya bulunamadı".into());
+        return Err("File not found".into());
     }
     explorer_open(&path);
     Ok(())
@@ -433,7 +433,7 @@ fn reveal_path(path: String) -> Result<(), String> {
             explorer_open(&d);
             Ok(())
         }
-        _ => Err("Dosya bulunamadı".into()),
+        _ => Err("File not found".into()),
     }
 }
 
@@ -447,7 +447,7 @@ fn open_dir_impl(p: PathBuf) -> Result<(), String> {
 fn open_download_dir() -> Result<(), String> {
     match download_dir() {
         Some(d) => open_dir_impl(PathBuf::from(d)),
-        None => Err("İndirme klasörü ayarlanmamış".into()),
+        None => Err("Download folder is not set".into()),
     }
 }
 
@@ -528,14 +528,14 @@ static EXT_BUSY: AtomicBool = AtomicBool::new(false);
 /// Returns the final {"done":..} object.
 #[tauri::command]
 async fn install_extension(app: AppHandle, id: String) -> Result<Value, String> {
-    let (_, name, exe, url, rel) = BROWSERS.iter().find(|b| b.0 == id).ok_or("Bilinmeyen tarayıcı")?;
-    let browser = find_browser_exe(exe, rel).ok_or_else(|| format!("{name} bulunamadı"))?;
+    let (_, name, exe, url, rel) = BROWSERS.iter().find(|b| b.0 == id).ok_or("Unknown browser")?;
+    let browser = find_browser_exe(exe, rel).ok_or_else(|| format!("{name} not found"))?;
     let script = install_script(&app);
     if !script.exists() {
-        return Err("Kurulum betiği bulunamadı".into());
+        return Err("Install script not found".into());
     }
     if EXT_BUSY.swap(true, Ordering::SeqCst) {
-        return Err("Kurulum zaten sürüyor".into());
+        return Err("Setup is already in progress".into());
     }
     let ext = extension_dir(&app);
     let url = url.to_string();
@@ -557,7 +557,7 @@ async fn install_extension(app: AppHandle, id: String) -> Result<Value, String> 
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .stdin(Stdio::null());
-        let mut child = no_window(&mut c).spawn().map_err(|e| format!("Betik başlatılamadı: {e}"))?;
+        let mut child = no_window(&mut c).spawn().map_err(|e| format!("Could not start script: {e}"))?;
         let mut last: Option<Value> = None;
         if let Some(out) = child.stdout.take() {
             for line in BufReader::new(out).lines().map_while(Result::ok) {
@@ -570,7 +570,7 @@ async fn install_extension(app: AppHandle, id: String) -> Result<Value, String> 
             }
         }
         let _ = child.wait();
-        Ok(last.unwrap_or_else(|| json!({"done": true, "ok": false, "failedStep": "unknown", "message": "Betik sonuç vermedi"})))
+        Ok(last.unwrap_or_else(|| json!({"done": true, "ok": false, "failedStep": "unknown", "message": "Script returned no result"})))
     })
     .await
     .map_err(|e| e.to_string())
@@ -584,9 +584,9 @@ async fn install_extension(app: AppHandle, id: String) -> Result<Value, String> 
 /// Returns the folder path (the UI copies it to the clipboard).
 #[tauri::command]
 fn setup_browser(app: AppHandle, id: String) -> Result<String, String> {
-    let (_, name, exe, url, rel) = BROWSERS.iter().find(|b| b.0 == id).ok_or("Bilinmeyen tarayıcı")?;
-    let path = find_browser_exe(exe, rel).ok_or_else(|| format!("{name} bulunamadı"))?;
-    Command::new(path).arg(url).spawn().map_err(|e| format!("{name} açılamadı: {e}"))?;
+    let (_, name, exe, url, rel) = BROWSERS.iter().find(|b| b.0 == id).ok_or("Unknown browser")?;
+    let path = find_browser_exe(exe, rel).ok_or_else(|| format!("{name} not found"))?;
+    Command::new(path).arg(url).spawn().map_err(|e| format!("Could not open {name}: {e}"))?;
     let dir = extension_dir(&app);
     explorer_open(&dir.to_string_lossy());
     Ok(dir.to_string_lossy().into_owned())
@@ -618,7 +618,7 @@ fn set_download_dir(app: AppHandle, dir: String) -> Result<(), String> {
 #[tauri::command]
 async fn update_ytdlp() -> Result<String, String> {
     if !ytdlp_path().exists() {
-        return Err("yt-dlp kurulu deÄŸil; â€œOnarâ€Ä± kullanÄ±n".into());
+        return Err("yt-dlp is not installed; use Repair".into());
     }
     tauri::async_runtime::spawn_blocking(|| {
         let out = run_ytdlp(&["-U"])?;
@@ -631,7 +631,7 @@ async fn update_ytdlp() -> Result<String, String> {
 #[tauri::command]
 async fn run_setup(app: AppHandle, force: bool) -> Result<(), String> {
     if BUSY.swap(true, Ordering::SeqCst) {
-        return Err("Başka bir işlem sürüyor".into());
+        return Err("Another operation is in progress".into());
     }
     let r = do_setup(&app, force).await;
     BUSY.store(false, Ordering::SeqCst);
@@ -716,7 +716,7 @@ fn downloads_running() -> bool {
 async fn run_update(app: &AppHandle) -> Result<String, String> {
     use tauri_plugin_updater::UpdaterExt;
     if UPDATING.swap(true, Ordering::SeqCst) {
-        return Ok("Güncelleme zaten sürüyor".into());
+        return Ok("Update already in progress".into());
     }
     struct Guard;
     impl Drop for Guard {
@@ -726,17 +726,17 @@ async fn run_update(app: &AppHandle) -> Result<String, String> {
     }
     let _g = Guard;
 
-    emit_update(app, "checking", "Denetleniyor…");
+    emit_update(app, "checking", "Checking…");
     let updater = app.updater().map_err(|e| e.to_string())?;
     let update = match updater.check().await.map_err(|e| e.to_string())? {
         Some(u) => u,
         None => {
-            emit_update(app, "uptodate", "Güncel");
-            return Ok("Güncel".into());
+            emit_update(app, "uptodate", "Up to date");
+            return Ok("Up to date".into());
         }
     };
     let ver = update.version.clone();
-    emit_update(app, "downloading", &format!("İndiriliyor… ({ver})"));
+    emit_update(app, "downloading", &format!("Downloading… ({ver})"));
     let mut got: u64 = 0;
     let mut last_pct: i64 = -1;
     let app2 = app.clone();
@@ -749,7 +749,7 @@ async fn run_update(app: &AppHandle) -> Result<String, String> {
                     let pct = (got * 100 / t) as i64;
                     if pct != last_pct {
                         last_pct = pct;
-                        emit_update(&app2, "downloading", &format!("İndiriliyor… %{pct} ({ver2})"));
+                        emit_update(&app2, "downloading", &format!("Downloading… {pct}% ({ver2})"));
                     }
                 }
             },
@@ -763,12 +763,12 @@ async fn run_update(app: &AppHandle) -> Result<String, String> {
     while downloads_running() {
         if !waited {
             waited = true;
-            emit_update(app, "waiting", &format!("İndirmeler bitince kurulacak ({ver})"));
+            emit_update(app, "waiting", &format!("Will install when downloads finish ({ver})"));
         }
         tokio_sleep(30).await;
     }
 
-    let msg = format!("Vidsnap güncellendi ({ver}) — yeniden başlatılıyor");
+    let msg = format!("Vidsnap updated ({ver}) — restarting");
     emit_update(app, "installing", &msg);
     show_toast(app, "Vidsnap", &msg, None);
     tokio_sleep(2).await;
@@ -785,7 +785,7 @@ async fn tokio_sleep(secs: u64) {
 async fn check_update(app: AppHandle) -> Result<String, String> {
     let r = run_update(&app).await;
     if let Err(e) = &r {
-        emit_update(&app, "error", &format!("Hata: {e}"));
+        emit_update(&app, "error", &format!("Error: {e}"));
     }
     r
 }
@@ -796,7 +796,7 @@ fn start_auto_update(app: AppHandle) {
         loop {
             if auto_update_enabled() {
                 if let Err(e) = run_update(&app).await {
-                    emit_update(&app, "error", &format!("Hata: {e}"));
+                    emit_update(&app, "error", &format!("Error: {e}"));
                 }
             }
             tokio_sleep(6 * 60 * 60).await;
@@ -834,7 +834,7 @@ fn detect_new(seen: &HashSet<String>, entries: &[Value]) -> Vec<Value> {
 fn toast_body(e: &Value) -> String {
     let title = e.get("title").and_then(|v| v.as_str()).filter(|s| !s.is_empty())
         .or_else(|| e.get("file").and_then(|v| v.as_str()))
-        .unwrap_or("(adsız)");
+        .unwrap_or("(untitled)");
     let label = e.get("label").and_then(|v| v.as_str()).unwrap_or("");
     let kind = if e.get("audio").and_then(|v| v.as_bool()).unwrap_or(false) { "MP3" } else { "MP4" };
     let tail = if label.is_empty() { kind.to_string() } else { format!("{label} {kind}") };
@@ -864,12 +864,12 @@ fn notify_new(app: &AppHandle, new: &[Value]) {
         return;
     }
     if new.len() > MAX_INDIVIDUAL_TOASTS {
-        show_toast(app, "İndirildi", &format!("{} indirme tamamlandı", new.len()), None);
+        show_toast(app, "Downloaded", &format!("{} downloads completed", new.len()), None);
         return;
     }
     for e in new {
         let file = e.get("file").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(String::from);
-        show_toast(app, "İndirildi", &toast_body(e), file);
+        show_toast(app, "Downloaded", &toast_body(e), file);
     }
 }
 
@@ -892,7 +892,7 @@ fn spawn_tray_update(app: &AppHandle) {
     tauri::async_runtime::spawn(async move {
         let _ = app.emit("tray-update", "start");
         let r = update_ytdlp().await;
-        let _ = app.emit("tray-update", match r { Ok(s) => s, Err(e) => format!("Hata: {e}") });
+        let _ = app.emit("tray-update", match r { Ok(s) => s, Err(e) => format!("Error: {e}") });
     });
 }
 
@@ -958,14 +958,14 @@ fn watch_active(app: AppHandle) {
                         .filter_map(|e| e.get("percent").and_then(|v| v.as_f64()))
                         .fold(0.0_f64, |a, b| a.max(b));
                     if running == 1 {
-                        format!("Vidsnap — 1 indirme sürüyor (%{})", pct.floor() as i64)
+                        format!("Vidsnap — 1 download in progress ({}%)", pct.floor() as i64)
                     } else {
-                        format!("Vidsnap — {} indirme sürüyor", running)
+                        format!("Vidsnap — {} downloads in progress", running)
                     }
                 } else if running == 0 {
-                    format!("Vidsnap — {} indirme duraklatıldı", paused)
+                    format!("Vidsnap — {} downloads paused", paused)
                 } else {
-                    format!("Vidsnap — {} indirme sürüyor, {} duraklatıldı", running, paused)
+                    format!("Vidsnap — {} downloads in progress, {} paused", running, paused)
                 };
                 if tip != last_tip {
                     last_tip = tip.clone();
@@ -1031,14 +1031,14 @@ pub fn run() {
 
             let menu = MenuBuilder::new(app)
                 .items(&[
-                    &MenuItemBuilder::with_id("history", "Geçmişi göster").build(app)?,
-                    &MenuItemBuilder::with_id("folder", "İndirme klasörünü aç").build(app)?,
-                    &MenuItemBuilder::with_id("update", "yt-dlp'yi güncelle").build(app)?,
-                    &MenuItemBuilder::with_id("settings", "Ayarlar").build(app)?,
-                    &MenuItemBuilder::with_id("log", "Günlüğü aç").build(app)?,
+                    &MenuItemBuilder::with_id("history", "Show history").build(app)?,
+                    &MenuItemBuilder::with_id("folder", "Open download folder").build(app)?,
+                    &MenuItemBuilder::with_id("update", "Update yt-dlp").build(app)?,
+                    &MenuItemBuilder::with_id("settings", "Settings").build(app)?,
+                    &MenuItemBuilder::with_id("log", "Open log").build(app)?,
                 ])
                 .separator()
-                .item(&MenuItemBuilder::with_id("quit", "Çıkış").build(app)?)
+                .item(&MenuItemBuilder::with_id("quit", "Quit").build(app)?)
                 .build()?;
 
             TrayIconBuilder::with_id("main")
@@ -1077,7 +1077,7 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("Vidsnap başlatılamadı");
+        .expect("Failed to start Vidsnap");
 }
 
 

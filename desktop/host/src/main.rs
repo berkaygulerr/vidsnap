@@ -444,7 +444,7 @@ fn parent_image_name() -> Option<String> {
 }
 
 fn record_extension() {
-    let browser = parent_image_name().filter(|s| !s.is_empty()).unwrap_or_else(|| "bilinmiyor".into());
+    let browser = parent_image_name().filter(|s| !s.is_empty()).unwrap_or_else(|| "unknown".into());
     let origin = std::env::args().nth(1).unwrap_or_default();
     let v = json!({ "connectedAt": now_ms(), "browser": browser, "origin": origin });
     let tmp = PathBuf::from(format!("{}.{}.tmp", PATHS.ext.display(), std::process::id()));
@@ -640,7 +640,7 @@ fn clean_error(err: &str) -> String {
         .map(|s| s.to_string())
         .filter(|s| !s.is_empty())
         .or_else(|| err.trim().lines().last().map(|s| s.to_string()).filter(|s| !s.is_empty()))
-        .unwrap_or_else(|| "Bilinmeyen hata".into());
+        .unwrap_or_else(|| "Unknown error".into());
     let msg = match last.strip_prefix("ERROR:") {
         Some(r) => r.trim_start().to_string(),
         None => last,
@@ -683,7 +683,7 @@ fn update_ytdlp(force: bool) -> bool {
         *g = Some(slot.clone());
     }
     let cfg = CONFIG.lock().unwrap().clone();
-    log(&format!("yt-dlp update {}", if force { "(zorla)" } else { "(günlük)" }));
+    log(&format!("yt-dlp update {}", if force { "(forced)" } else { "(daily)" }));
     let mut out = String::new();
     let mut ok = false;
     let mut cmd = Command::new(&cfg.ytdlp);
@@ -854,7 +854,7 @@ fn probe(req: &Value) -> Result<Value, String> {
             }
         }
     }
-    let msg = errors.first().cloned().unwrap_or_else(|| "Bu videoda indirilebilir format bulunamadı".into());
+    let msg = errors.first().cloned().unwrap_or_else(|| "No downloadable format found for this video".into());
     Ok(msg_with_id(req, vec![("type", "error".into()), ("message", msg.into())]))
 }
 
@@ -877,7 +877,7 @@ fn probe_once(cfg: &Config, req: &Value, cand: &Value, use_cookies: bool, errors
             }
         }
         if !truthy(&info) {
-            errors.push("Video bulunamadı".into());
+            errors.push("Video not found".into());
             return Ok(None);
         }
         let options = build_options(&info);
@@ -1325,7 +1325,7 @@ fn handle(msg: &Value) {
         }
         _ => send(msg_with_id(
             msg,
-            vec![("type", "error".into()), ("message", format!("Bilinmeyen istek: {}", ty).into())],
+            vec![("type", "error".into()), ("message", format!("Unknown request: {}", ty).into())],
         )),
     }
 }
